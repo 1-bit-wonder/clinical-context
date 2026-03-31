@@ -1,0 +1,16 @@
+{
+  "name": "clinicalcontext",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "RAG ingest pipeline for BC Clinical Guidelines",
+  "main": "src/ingest.js",
+  "scripts": {
+    "ingest": "node src/ingest.js"
+  },
+  "dependencies": {
+    "pdf-parse": "^1.1.1",
+    "pg": "^8.11.0",
+    "pgvector": "^0.2.0",
+    "dotenv": "^16.0.0"
+  }
+}
