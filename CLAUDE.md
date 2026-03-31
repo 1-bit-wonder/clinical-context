@@ -52,3 +52,28 @@ node src/ingest.js ./guidelines
 - `pgvector` package used only for `toSql()` — all queries written by hand
 - Native `fetch` only — no axios or node-fetch
 - No concurrency over embed calls
+
+## Lessons learned
+
+> Keep this section updated as development progresses — add new entries whenever a bug is found, a design decision is made, or something surprising happens. This is the institutional memory for the project.
+
+
+
+### Chunker bug (fixed 2026-03-31)
+Original chunker searched for `\n\n` across the full chunk window. When a double newline appeared near the start of the window, `splitAt` barely advanced past `start`, causing `start` to increment by 1 char per iteration. Result: thousands of tiny slivers (e.g. 1211 chunks for an 8-page PDF, avg 258 chars each). Fix: only search for split points in the **latter half** of the window (`minSplit = start + chunkSize/2`), guaranteeing meaningful forward progress on every iteration.
+
+**Lesson**: always sanity-check chunk counts and avg chunk size before running a long ingest. Healthy chunks should average 1000–2000 chars. A quick SQL query catches this early:
+```sql
+SELECT d.filename, COUNT(c.id) AS chunks, ROUND(AVG(length(c.content))) AS avg_chars
+FROM documents d JOIN chunks c ON c.document_id = d.id
+GROUP BY d.filename ORDER BY avg_chars ASC;
+```
+
+### Voyage AI free tier limits (2026-03-31)
+Without a payment method: 3 RPM and 10K TPM. At 3 RPM with ~21s between requests, the full 192-PDF corpus (~3500 chunks total) takes 18–20 hours. With a payment method (still 200M free tokens, no charge for this corpus): standard rate limits, ingest completes in under an hour. Adding a payment method is the practical choice.
+
+### Chunk size tuning
+Current defaults: `chunkSize=2000, overlap=400`. For clinical guidelines, **1000–1500 chars** is likely a better target — guidelines are section-structured, and 2000 chars often spans two unrelated sections, degrading retrieval precision. Consider re-ingesting at 1200/300 once Phase 2 retrieval quality can be tested empirically.
+
+### Checking DB health before a long ingest run
+After any chunker or pipeline change, ingest 2–3 PDFs and inspect the DB before committing to the full corpus. Saves hours of wasted API calls.

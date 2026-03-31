@@ -4,10 +4,9 @@ export function chunkText(text, chunkSize = 2000, overlap = 400) {
   let start = 0;
 
   while (start < text.length) {
-    let end = start + chunkSize;
+    const end = Math.min(start + chunkSize, text.length);
 
-    if (end >= text.length) {
-      // Last chunk: take everything remaining
+    if (end === text.length) {
       const content = text.slice(start).trim();
       if (content.length >= 100) {
         chunks.push({ content, chunkIndex: chunkIndex++ });
@@ -15,21 +14,25 @@ export function chunkText(text, chunkSize = 2000, overlap = 400) {
       break;
     }
 
-    // Try to split on double newline within the chunk window
-    let splitAt = -1;
-    const searchRegion = text.slice(start, end);
+    // Only search the latter half of the window for a split point.
+    // This guarantees splitAt is always at least (chunkSize / 2) ahead of
+    // start, preventing near-infinite loops when \n\n appears near the top
+    // of the window.
+    const minSplit = start + Math.floor(chunkSize / 2);
+    const searchRegion = text.slice(minSplit, end);
+
+    let splitAt = end; // fallback: hard cut
 
     const doubleNewline = searchRegion.lastIndexOf('\n\n');
-    if (doubleNewline !== -1 && doubleNewline > 0) {
-      splitAt = start + doubleNewline;
+    if (doubleNewline !== -1) {
+      splitAt = minSplit + doubleNewline;
     } else {
       const singleNewline = searchRegion.lastIndexOf('\n');
-      if (singleNewline !== -1 && singleNewline > 0) {
-        splitAt = start + singleNewline;
+      if (singleNewline !== -1) {
+        splitAt = minSplit + singleNewline;
       } else {
-        // Fall back to last space to avoid splitting mid-word
         const lastSpace = searchRegion.lastIndexOf(' ');
-        splitAt = lastSpace !== -1 ? start + lastSpace : end;
+        if (lastSpace !== -1) splitAt = minSplit + lastSpace;
       }
     }
 
@@ -38,8 +41,7 @@ export function chunkText(text, chunkSize = 2000, overlap = 400) {
       chunks.push({ content, chunkIndex: chunkIndex++ });
     }
 
-    // Next chunk starts (splitAt - overlap) to create overlap
-    start = Math.max(splitAt - overlap, start + 1);
+    start = splitAt - overlap;
   }
 
   return chunks;
